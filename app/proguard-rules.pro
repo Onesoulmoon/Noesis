@@ -1,0 +1,6 @@
+-keep class com.necrosed.noesis.data.** { *; }
+-keep class com.necrosed.noesis.analysis.** { *; }
+-keep class net.sqlcipher.** { *; }
+-keep class net.sqlcipher.database.** { *; }
+-keepattributes *Annotation*
+-dontwarn kotlin.**
