@@ -1,20 +1,25 @@
 package com.necrosed.noesis.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.necrosed.noesis.ai.AiRole
 import com.necrosed.noesis.data.model.Composition
 import com.necrosed.noesis.data.model.Entry
 import com.necrosed.noesis.data.model.Revision
@@ -35,12 +40,13 @@ fun StreamScreen(viewModel: MainViewModel) {
     val entries       by viewModel.entries.collectAsStateWithLifecycle()
     val searchQuery   by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedEntry by viewModel.selectedEntry.collectAsStateWithLifecycle()
-    val composition by viewModel.selectedComposition.collectAsStateWithLifecycle()
+    val composition   by viewModel.selectedComposition.collectAsStateWithLifecycle()
     val compositionStatus by viewModel.compositionStatus.collectAsStateWithLifecycle()
-    val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
+    val modelStatus   by viewModel.modelStatus.collectAsStateWithLifecycle()
+    val selectedRole  by viewModel.selectedRole.collectAsStateWithLifecycle()
 
     if (selectedEntry != null) {
-        androidx.activity.compose.BackHandler {
+        BackHandler {
             viewModel.clearSelectedEntry()
         }
         EntryDetailPanel(
@@ -49,7 +55,8 @@ fun StreamScreen(viewModel: MainViewModel) {
             composition = composition,
             compositionStatus = compositionStatus,
             modelStatus = modelStatus,
-            onCompose = { mode -> viewModel.composeSelectedEntry(selectedEntry!!.entryNumber, mode) },
+            selectedRole = selectedRole,
+            onCompose = { role, mode -> viewModel.composeSelectedEntry(selectedEntry!!.entryNumber, role = role, mode = mode) },
             onInstallLocalModel = viewModel::installLocalModel,
             onSaveComposition = viewModel::saveComposition,
             onClose   = viewModel::clearSelectedEntry,
@@ -109,7 +116,8 @@ private fun CompositionPanel(
     composition: Composition?,
     status: CompositionStatus,
     modelStatus: ModelStatus,
-    onCompose: (String) -> Unit,
+    selectedRole: AiRole,
+    onCompose: (AiRole, String) -> Unit,
     onInstallLocalModel: () -> Unit,
     onSaveEdit: (Composition) -> Unit,
     conceptLinks: List<ConceptLink>
@@ -122,6 +130,8 @@ private fun CompositionPanel(
     var editTitle by remember(composition) { mutableStateOf(composition?.title ?: "") }
     var editSubtitle by remember(composition) { mutableStateOf(composition?.subtitle ?: "") }
     var editKeyInsight by remember(composition) { mutableStateOf(composition?.keyInsight ?: "") }
+
+    val activeRole = composition?.role ?: selectedRole
 
     Column(
         modifier = Modifier
@@ -139,7 +149,10 @@ private fun CompositionPanel(
         ) {
             Column(Modifier.weight(1f)) {
                 Text("COMPOSED THOUGHT", style = NoesisSectionHeader.copy(color = NoesisViolet))
-                Text("ON-DEVICE / GEMMA 4 E2B", style = NoesisMicro.copy(color = NoesisGrayDim, letterSpacing = 1.5.sp))
+                Text(
+                    "ROLE: ${activeRole.displayName.uppercase()} · GEMMA 4 E2B",
+                    style = NoesisMicro.copy(color = NoesisGrayDim, letterSpacing = 1.5.sp)
+                )
             }
             
             if (composition != null && !editMode) {
@@ -151,27 +164,63 @@ private fun CompositionPanel(
                     )
                     Box {
                         Text(
-                            text = "REGENERATE ▾",
+                            text = "ROLE & REGENERATE ▾",
                             style = NoesisMicro.copy(color = NoesisVioletDim),
                             modifier = Modifier.clickable { showRegenMenu = true }
                         )
-                        androidx.compose.material3.DropdownMenu(
+                        DropdownMenu(
                             expanded = showRegenMenu,
                             onDismissRequest = { showRegenMenu = false },
-                            modifier = Modifier.background(NoesisPanelHigh).border(Dp(0.5f), BorderLight)
+                            modifier = Modifier
+                                .background(NoesisPanelHigh)
+                                .border(Dp(0.5f), BorderLight)
+                                .widthIn(max = 240.dp)
                         ) {
+                            Text(
+                                "COGNITIVE ROLES",
+                                style = NoesisMicro.copy(color = NoesisViolet, fontSize = 9.sp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                            AiRole.entries.forEach { role ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                role.displayName,
+                                                style = NoesisMicro.copy(
+                                                    color = if (role == activeRole) NoesisVioletHi else NoesisBone
+                                                )
+                                            )
+                                            Text(
+                                                role.description,
+                                                style = NoesisMicro.copy(color = NoesisGhostText, fontSize = 8.sp),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showRegenMenu = false
+                                        onCompose(role, "default")
+                                    }
+                                )
+                            }
+                            NoesisDivider(color = BorderFaint)
+                            Text(
+                                "PROMPT MODIFIERS",
+                                style = NoesisMicro.copy(color = NoesisVioletDim, fontSize = 9.sp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
                             listOf(
-                                "default" to "Default",
                                 "concise" to "More Concise",
                                 "analytical" to "More Analytical",
                                 "literal" to "More Literal",
-                                "reorganize" to "Reorganize"
+                                "reorganize" to "Reorganize Structure"
                             ).forEach { (mode, label) ->
-                                androidx.compose.material3.DropdownMenuItem(
+                                DropdownMenuItem(
                                     text = { Text(label, style = NoesisMicro.copy(color = NoesisBone)) },
                                     onClick = { 
                                         showRegenMenu = false
-                                        onCompose(mode)
+                                        onCompose(activeRole, mode)
                                     }
                                 )
                             }
@@ -210,7 +259,7 @@ private fun CompositionPanel(
                         when (modelStatus) {
                             is ModelStatus.NotInstalled -> NoesisButton("INSTALL LOCAL AI", onInstallLocalModel, enabled = true, color = NoesisViolet)
                             is ModelStatus.Downloading -> Text("INSTALLING ${modelStatus.progress}%", style = NoesisMicro.copy(color = NoesisVioletDim))
-                            is ModelStatus.Ready -> NoesisButton("COMPOSE", { onCompose("default") }, enabled = true, color = NoesisViolet)
+                            is ModelStatus.Ready -> NoesisButton("COMPOSE", { onCompose(selectedRole, "default") }, enabled = true, color = NoesisViolet)
                             is ModelStatus.Error -> NoesisButton("RETRY INSTALL", onInstallLocalModel, enabled = true, color = NoesisViolet)
                             is ModelStatus.Incompatible -> Text("AI UNAVAILABLE", style = NoesisMicro.copy(color = NoesisWarning))
                             ModelStatus.Checking -> Text("CHECKING AI…", style = NoesisMicro.copy(color = NoesisGrayDim))
@@ -227,7 +276,7 @@ private fun CompositionPanel(
             if (modelStatus is ModelStatus.NotInstalled || modelStatus is ModelStatus.Error) {
                 NoesisButton("INSTALL / RETRY LOCAL AI", onInstallLocalModel, enabled = true, color = NoesisViolet)
             } else {
-                NoesisButton("RETRY", { onCompose("default") }, enabled = true, color = NoesisViolet)
+                NoesisButton("RETRY", { onCompose(selectedRole, "default") }, enabled = true, color = NoesisViolet)
             }
         }
 
@@ -327,7 +376,7 @@ private fun CompositionPanel(
                     Text("KEY INSIGHT", style = NoesisSectionHeader.copy(fontSize = 14.sp, color = NoesisViolet, letterSpacing = 1.5.sp))
                     Spacer(Modifier.height(6.dp))
                     if (!editMode) {
-                        Text(insight, style = NoesisEntryBody.copy(fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                        Text(insight, style = NoesisEntryBody.copy(fontSize = 14.sp, fontStyle = FontStyle.Italic))
                     } else {
                         BasicTextField(
                             value = editKeyInsight,
@@ -419,7 +468,8 @@ private fun EntryDetailPanel(
     composition: Composition?,
     compositionStatus: CompositionStatus,
     modelStatus: ModelStatus,
-    onCompose: (String) -> Unit,
+    selectedRole: AiRole,
+    onCompose: (AiRole, String) -> Unit,
     onInstallLocalModel: () -> Unit,
     onSaveComposition: (Composition) -> Unit,
     onClose: () -> Unit,
@@ -434,11 +484,11 @@ private fun EntryDetailPanel(
     var rawDumpExpanded by remember { mutableStateOf(composition == null) }
 
     if (showReviseMode) {
-        androidx.activity.compose.BackHandler {
+        BackHandler {
             showReviseMode = false
         }
     } else if (showPurgeConfirm) {
-        androidx.activity.compose.BackHandler {
+        BackHandler {
             showPurgeConfirm = false
         }
     }
@@ -448,7 +498,6 @@ private fun EntryDetailPanel(
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         item {
-            // Back + header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -472,6 +521,7 @@ private fun EntryDetailPanel(
                 composition = composition,
                 status = compositionStatus,
                 modelStatus = modelStatus,
+                selectedRole = selectedRole,
                 onCompose = onCompose,
                 onInstallLocalModel = onInstallLocalModel,
                 onSaveEdit = onSaveComposition,
@@ -501,7 +551,6 @@ private fun EntryDetailPanel(
 
                 AnimatedVisibility(visible = rawDumpExpanded) {
                     Column {
-                        // Metadata
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -519,11 +568,9 @@ private fun EntryDetailPanel(
                         }
                         Spacer(Modifier.height(14.dp))
 
-                        // The sacred original text
                         if (!showReviseMode) {
                             Text(text = entry.content, style = NoesisEntryBody.copy(color = NoesisIvory))
                         } else {
-                            // Revision mode
                             if (reviseText.isEmpty()) { reviseText = entry.content }
                             BasicTextField(
                                 value       = reviseText,
@@ -580,7 +627,6 @@ private fun EntryDetailPanel(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary actions
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -614,7 +660,6 @@ private fun EntryDetailPanel(
                     }
                 }
 
-                // Destructive actions
                 if (!showReviseMode) {
                     NoesisDottedRule()
                     if (!showPurgeConfirm) {
@@ -636,7 +681,6 @@ private fun EntryDetailPanel(
                             )
                         }
                     } else {
-                        // Purge confirmation
                         Text(
                             text  = "PURGE PERMANENTLY — ${entry.displayId} will be removed.\nThe entry number is retired forever. This cannot be undone.",
                             style = NoesisMicro.copy(color = NoesisWarning),

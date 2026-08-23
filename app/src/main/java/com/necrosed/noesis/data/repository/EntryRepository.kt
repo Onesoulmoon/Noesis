@@ -1,6 +1,7 @@
 package com.necrosed.noesis.data.repository
 
 import android.content.Context
+import com.necrosed.noesis.ai.AiRole
 import com.necrosed.noesis.ai.GemmaCompositionEngine
 import com.necrosed.noesis.ai.OnDeviceModelManager
 import com.necrosed.noesis.ai.toEntities
@@ -8,6 +9,7 @@ import com.necrosed.noesis.analysis.ConceptMatcher
 import com.necrosed.noesis.analysis.PersistenceEngine
 import com.necrosed.noesis.analysis.TextAnalyzer
 import com.necrosed.noesis.analysis.detectLanguage
+import com.necrosed.noesis.data.db.dao.CompositionDao
 import com.necrosed.noesis.data.db.dao.ConceptDao
 import com.necrosed.noesis.data.db.dao.EntryDao
 import com.necrosed.noesis.data.db.entity.*
@@ -32,7 +34,7 @@ import kotlinx.coroutines.flow.map
 class EntryRepository(
     private val entryDao: EntryDao,
     private val conceptDao: ConceptDao,
-    private val dbCompositionDao: com.necrosed.noesis.data.db.dao.CompositionDao
+    private val dbCompositionDao: CompositionDao
 ) {
     private val textAnalyzer   = TextAnalyzer()
     private val conceptMatcher = ConceptMatcher()
@@ -78,7 +80,11 @@ class EntryRepository(
         runAnalysis(entryNumber, entry.content, entry.language)
     }
 
-    suspend fun composeEntry(entryNumber: Int, mode: String = "default"): Composition {
+    suspend fun composeEntry(
+        entryNumber: Int,
+        role: AiRole = AiRole.SYNTHESIS,
+        mode: String = "default"
+    ): Composition {
         val entry = entryDao.getByNumber(entryNumber) ?: error("Entry not found")
         val engine = compositionEngine ?: error("Composition engine not configured")
         
@@ -90,7 +96,7 @@ class EntryRepository(
             else        -> ""
         }
 
-        val result = engine.compose(entry.content, promptSuffix)
+        val result = engine.compose(entry.content, role = role, promptSuffix = promptSuffix)
         val (composition, sections, questions) = result.toEntities(entryNumber)
         val compositionDao = dbCompositionDao
         compositionDao.replace(composition, sections, questions)
@@ -101,11 +107,22 @@ class EntryRepository(
                     title = it.title, 
                     content = it.content,
                     interpretation = it.interpretation,
-                    sourceFragments = it.sourceFragments.split("|").filter { f -> f.isNotBlank() }
+                    sourceFragments = it.sourceFragments.split("|").filter { f -> f.isNotBlank() },
+                    epistemicStatus = it.epistemicStatus
                 ) 
             }
             val qs = compositionDao.getQuestions(entity.id).map { it.question }
-            Composition(entryNumber, entity.title, entity.subtitle, sectionsDomain, entity.keyInsight, qs, entity.modelId, entity.status)
+            Composition(
+                entryNumber = entryNumber,
+                title = entity.title,
+                subtitle = entity.subtitle,
+                sections = sectionsDomain,
+                keyInsight = entity.keyInsight,
+                openQuestions = qs,
+                modelId = entity.modelId,
+                status = entity.status,
+                role = AiRole.from(entity.role)
+            )
         }
     }
 
@@ -122,7 +139,17 @@ class EntryRepository(
             ) 
         }
         val questions = dbCompositionDao.getQuestions(entity.id).map { it.question }
-        return Composition(entryNumber, entity.title, entity.subtitle, sections, entity.keyInsight, questions, entity.modelId, entity.status)
+        return Composition(
+            entryNumber = entryNumber,
+            title = entity.title,
+            subtitle = entity.subtitle,
+            sections = sections,
+            keyInsight = entity.keyInsight,
+            openQuestions = questions,
+            modelId = entity.modelId,
+            status = entity.status,
+            role = AiRole.from(entity.role)
+        )
     }
 
     // ─── REVISE ─────────────────────────────────────────────────
@@ -138,10 +165,6 @@ class EntryRepository(
         )
         entryDao.insertRevision(revision)
 
-        // Update the entry's content and modified timestamp
-        // Note: we don't update content field directly through a dedicated update DAO
-        // method — instead delete+reinsert preserving created_at for immutability feel.
-        // Actually Room won't let us update partial columns easily, so use raw update:
         val updated = entry.copy(
             content        = newContent.trim(),
             lastModifiedAt = System.currentTimeMillis()
@@ -163,8 +186,6 @@ class EntryRepository(
         entryDao.purgeEntry(entryNumber)
         entryDao.deleteRevisions(entryNumber)
         dbCompositionDao.delete(entryNumber)
-        // Relations remain in concept_entry_relations for continuity but
-        // the entry content is gone — only the entry number lingers as a ghost
     }
 
     suspend fun toggleUnresolved(entryNumber: Int) {
@@ -181,6 +202,7 @@ class EntryRepository(
             keyInsight = composition.keyInsight,
             rawJson = "{}", // Manual edit loses raw LLM JSON but it's fine
             modelId = composition.modelId,
+            role = composition.role.name,
             status = "EDITED"
         )
         val sections = composition.sections.mapIndexed { i, s ->
@@ -266,7 +288,6 @@ class EntryRepository(
                     observedAt    = entryTs
                 )
             )
-            // Recalculate persistence for matched concept
             recalculatePersistence(match.conceptNumber)
         }
 

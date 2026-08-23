@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import com.necrosed.noesis.data.db.dao.ConceptDao
@@ -35,7 +37,7 @@ import com.necrosed.noesis.security.KeystoreManager
         CompositionSectionEntity::class,
         CompositionQuestionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class NoesisDatabase : RoomDatabase() {
@@ -45,8 +47,8 @@ abstract class NoesisDatabase : RoomDatabase() {
     abstract fun compositionDao(): CompositionDao
 
     companion object {
-        private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS compositions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, entry_number INTEGER NOT NULL, title TEXT NOT NULL, subtitle TEXT, keyInsight TEXT, rawJson TEXT NOT NULL, modelId TEXT NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_compositions_entry_number ON compositions(entry_number)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS composition_sections (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, composition_id INTEGER NOT NULL, position INTEGER NOT NULL, type TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL)")
@@ -56,13 +58,20 @@ abstract class NoesisDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE composition_sections ADD COLUMN interpretation TEXT")
                 db.execSQL("ALTER TABLE composition_sections ADD COLUMN source_fragments TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE composition_sections ADD COLUMN epistemic_status TEXT")
             }
         }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE compositions ADD COLUMN role TEXT NOT NULL DEFAULT 'SYNTHESIS'")
+            }
+        }
+
         private const val DB_NAME = "noesis_archive.db"
 
         @Volatile
@@ -90,9 +99,7 @@ abstract class NoesisDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                // !! Remove fallbackToDestructiveMigration before 1.0 release.
-                // Replace with proper Migration objects as schema evolves.
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
         }
     }

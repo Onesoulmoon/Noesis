@@ -1,5 +1,6 @@
 package com.necrosed.noesis.data.model
 
+import com.necrosed.noesis.ai.AiRole
 import com.necrosed.noesis.data.db.entity.PersistenceLevel
 
 // ═══════════════════════════════════════════════════════════════
@@ -118,7 +119,8 @@ data class Composition(
     val keyInsight: String?,
     val openQuestions: List<String>,
     val modelId: String,
-    val status: String
+    val status: String,
+    val role: AiRole = AiRole.SYNTHESIS
 )
 
 data class CompositionSection(

@@ -3,6 +3,8 @@ package com.necrosed.noesis.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -11,15 +13,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.necrosed.noesis.ai.AiRole
 import com.necrosed.noesis.data.model.*
 import com.necrosed.noesis.ui.*
 import com.necrosed.noesis.ui.components.*
 import com.necrosed.noesis.ui.theme.*
+import kotlinx.coroutines.delay
 
 // ═══════════════════════════════════════════════════════════════
 // CAPTURE SCREEN — PRIMARY HOME SURFACE
@@ -36,6 +40,7 @@ import com.necrosed.noesis.ui.theme.*
 fun CaptureScreen(viewModel: MainViewModel) {
     val captureText   by viewModel.captureText.collectAsStateWithLifecycle()
     val captureStatus by viewModel.captureStatus.collectAsStateWithLifecycle()
+    val selectedRole  by viewModel.selectedRole.collectAsStateWithLifecycle()
     val maturity      by viewModel.archiveMaturity.collectAsStateWithLifecycle()
     val recentEntries by viewModel.recentEntries.collectAsStateWithLifecycle()
     val significant   by viewModel.significantConcepts.collectAsStateWithLifecycle()
@@ -53,12 +58,23 @@ fun CaptureScreen(viewModel: MainViewModel) {
         // ── CAPTURE TERMINAL ────────────────────────────────────
         LocalAiStatus(modelStatus = modelStatus, onInstall = viewModel::installLocalModel)
 
+        Spacer(Modifier.height(8.dp))
+
+        // ── AI ROLE SELECTOR ────────────────────────────────────
+        AiRoleSelector(
+            selectedRole = selectedRole,
+            onRoleSelect = viewModel::selectRole
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         CaptureTerminal(
-            text     = captureText,
-            status   = captureStatus,
-            onType   = viewModel::onCaptureTextChange,
+            text      = captureText,
+            status    = captureStatus,
+            activeRole = selectedRole,
+            onType    = viewModel::onCaptureTextChange,
             onArchive = viewModel::archiveThought,
-            onClear  = viewModel::clearCaptureStatus
+            onClear   = viewModel::clearCaptureStatus
         )
 
         // ── PATTERN PANEL (MATURE only) ──────────────────────────
@@ -106,6 +122,69 @@ private fun LocalAiStatus(modelStatus: ModelStatus, onInstall: () -> Unit) {
     }
 }
 
+// ─── AI ROLE SELECTOR ───────────────────────────────────────────
+
+@Composable
+private fun AiRoleSelector(
+    selectedRole: AiRole,
+    onRoleSelect: (AiRole) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text  = "ACTIVE COGNITIVE ROLE",
+                style = NoesisMicro.copy(color = NoesisVioletDim, letterSpacing = 1.5.sp)
+            )
+            Text(
+                text  = "[ ${selectedRole.displayName.uppercase()} ]",
+                style = NoesisMicro.copy(color = NoesisViolet)
+            )
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(vertical = 2.dp)
+        ) {
+            items(AiRole.entries) { role ->
+                val isSelected = role == selectedRole
+                val borderColor = if (isSelected) NoesisViolet else BorderLight
+                val textColor = if (isSelected) NoesisVioletHi else NoesisGrayDim
+                val bgColor = if (isSelected) NoesisVioletVeil else NoesisPanel
+
+                Box(
+                    modifier = Modifier
+                        .background(bgColor)
+                        .border(Dp(0.5f), borderColor)
+                        .clickable { onRoleSelect(role) }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text  = role.displayName.uppercase(),
+                        style = NoesisMicro.copy(color = textColor, letterSpacing = 1.sp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text  = selectedRole.description,
+            style = NoesisMicro.copy(color = NoesisGhostText, fontSize = 10.sp)
+        )
+    }
+}
+
 // ─── WORDMARK ───────────────────────────────────────────────────
 
 @Composable
@@ -116,7 +195,6 @@ private fun ArchiveWordmark() {
             .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
-        // Spectral serif title — the NOESIS identity
         Text(
             text  = "NOESIS",
             style = NoesisWordmark
@@ -139,6 +217,7 @@ private fun ArchiveWordmark() {
 private fun CaptureTerminal(
     text: String,
     status: CaptureStatus,
+    activeRole: AiRole,
     onType: (String) -> Unit,
     onArchive: () -> Unit,
     onClear: () -> Unit
@@ -150,7 +229,6 @@ private fun CaptureTerminal(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
-        // Prompt label — serif
         Text(
             text  = "Capture",
             style = NoesisConceptSub.copy(color = NoesisVioletDim)
@@ -173,7 +251,6 @@ private fun CaptureTerminal(
                 .clickable { focusRequester.requestFocus() }
         ) {
             Row(verticalAlignment = Alignment.Top) {
-                // Prompt character
                 Text(
                     text  = ">",
                     style = NoesisInput.copy(color = NoesisVioletDim),
@@ -212,18 +289,17 @@ private fun CaptureTerminal(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status display
             AnimatedContent(targetState = status, label = "capture_status") { s ->
                 when (s) {
                     is CaptureStatus.Idle      -> {
                         Text(
                             text  = "${text.trim().split(Regex("\\s+"))
-                                .filter { it.isNotBlank() }.size} TOKENS",
+                                .filter { it.isNotBlank() }.size} TOKENS · ROLE: ${activeRole.displayName.uppercase()}",
                             style = NoesisMicro.copy(color = NoesisGhostText)
                         )
                     }
                     is CaptureStatus.Archiving -> {
-                        Text("ARCHIVING...", style = NoesisMicro.copy(color = NoesisVioletDim))
+                        Text("ARCHIVING & PROCESSING (${activeRole.displayName.uppercase()})…", style = NoesisMicro.copy(color = NoesisVioletDim))
                     }
                     is CaptureStatus.Archived  -> {
                         Text(
@@ -231,7 +307,7 @@ private fun CaptureTerminal(
                             style = NoesisMicro.copy(color = NoesisViolet)
                         )
                         LaunchedEffect(s) {
-                            kotlinx.coroutines.delay(2500)
+                            delay(2500)
                             onClear()
                         }
                     }
@@ -241,7 +317,6 @@ private fun CaptureTerminal(
                 }
             }
 
-            // Archive button
             NoesisButton(
                 label   = "ARCHIVE",
                 onClick = onArchive,
@@ -263,7 +338,6 @@ private fun PatternPanel(concepts: List<Concept>) {
         NoesisDivider()
         Spacer(Modifier.height(8.dp))
 
-        // Italic serif label — philosophical register
         Text(
             text  = "Detected patterns",
             style = NoesisConceptSub.copy(color = NoesisVioletDim, fontSize = 12.sp)
@@ -341,7 +415,7 @@ private fun RecentStreamPanel(entries: List<Entry>) {
                     style    = NoesisMicro.copy(color = NoesisGray),
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (entry.isUnresolved) {
                     Text(

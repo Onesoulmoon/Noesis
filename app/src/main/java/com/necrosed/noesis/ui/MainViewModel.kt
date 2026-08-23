@@ -3,12 +3,13 @@ package com.necrosed.noesis.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.necrosed.noesis.ai.AiRole
 import com.necrosed.noesis.data.db.NoesisDatabase
-import com.necrosed.noesis.ai.OnDeviceModelManager
 import com.necrosed.noesis.data.model.*
 import com.necrosed.noesis.data.repository.ConceptRepository
 import com.necrosed.noesis.data.repository.EntryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -40,10 +41,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    // ─── CAPTURE STATE ──────────────────────────────────────────
+    // ─── CAPTURE & ROLE STATE ────────────────────────────────────
 
     private val _captureText = MutableStateFlow("")
     val captureText: StateFlow<String> = _captureText.asStateFlow()
+
+    private val _selectedRole = MutableStateFlow(AiRole.SYNTHESIS)
+    val selectedRole: StateFlow<AiRole> = _selectedRole.asStateFlow()
 
     private val _captureStatus = MutableStateFlow<CaptureStatus>(CaptureStatus.Idle)
     val captureStatus: StateFlow<CaptureStatus> = _captureStatus.asStateFlow()
@@ -87,7 +91,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ─── PERSISTENT DASHBOARD ──────────────────────────────────
-    // mentioned 3+ times, first observed 5+ days ago, appeared in last 7 days.
     val persistentDashboardConcepts: StateFlow<List<Concept>> = concepts
         .map { list ->
             val now = System.currentTimeMillis()
@@ -110,7 +113,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val stats: StateFlow<ArchiveStats?> = _stats.asStateFlow()
 
     // ─── ARCHIVE MATURITY ───────────────────────────────────────
-    // Controls which panels the home screen shows
 
     val archiveMaturity: StateFlow<ArchiveMaturity> = entries
         .map { list ->
@@ -152,8 +154,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            // Give the DB a moment to decrypt and init
-            kotlinx.coroutines.delay(300)
+            delay(300)
             _isLoading.value = false
         }
         observeStats()
@@ -165,6 +166,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _stats.value = conceptRepo.getStats(_window.value)
             }
         }
+    }
+
+    // ─── ROLE MANAGEMENT ────────────────────────────────────────
+
+    fun selectRole(role: AiRole) {
+        _selectedRole.value = role
     }
 
     // ─── CAPTURE ACTIONS ────────────────────────────────────────
@@ -188,12 +195,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _stats.value = conceptRepo.getStats(_window.value)
 
-                // Never make capture wait for NLP/LLM inference.
                 viewModelScope.launch(Dispatchers.IO) {
                     try {
                         entryRepo.analyzeCapturedEntry(number)
                         _compositionStatus.value = CompositionStatus.Composing(number)
-                        entryRepo.composeEntry(number)
+                        entryRepo.composeEntry(number, role = _selectedRole.value)
                         _compositionStatus.value = CompositionStatus.Ready(number)
                     } catch (e: Throwable) {
                         _compositionStatus.value = CompositionStatus.Error(number, e.message ?: "Local composition failed")
@@ -228,11 +234,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun composeSelectedEntry(entryNumber: Int, mode: String = "default") {
+    fun composeSelectedEntry(
+        entryNumber: Int,
+        role: AiRole = _selectedRole.value,
+        mode: String = "default"
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 _compositionStatus.value = CompositionStatus.Composing(entryNumber)
-                _selectedComposition.value = entryRepo.composeEntry(entryNumber, mode)
+                _selectedComposition.value = entryRepo.composeEntry(entryNumber, role = role, mode = mode)
                 _compositionStatus.value = CompositionStatus.Ready(entryNumber)
             } catch (e: Throwable) {
                 _compositionStatus.value = CompositionStatus.Error(entryNumber, e.message ?: "Local composition failed")
@@ -335,14 +345,12 @@ enum class ArchiveMaturity {
     MATURE       // > 30 entries: capture + stream + pattern panel
 }
 
-
 sealed class CompositionStatus {
     object Unavailable : CompositionStatus()
     data class Composing(val entryNumber: Int) : CompositionStatus()
     data class Ready(val entryNumber: Int) : CompositionStatus()
     data class Error(val entryNumber: Int, val message: String) : CompositionStatus()
 }
-
 
 sealed class ModelStatus {
     object Checking : ModelStatus()
