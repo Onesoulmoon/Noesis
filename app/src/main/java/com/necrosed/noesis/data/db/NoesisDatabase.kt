@@ -35,7 +35,7 @@ import com.necrosed.noesis.security.KeystoreManager
         CompositionSectionEntity::class,
         CompositionQuestionEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class NoesisDatabase : RoomDatabase() {
@@ -53,6 +53,14 @@ abstract class NoesisDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_composition_sections_composition_id ON composition_sections(composition_id)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS composition_questions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, composition_id INTEGER NOT NULL, position INTEGER NOT NULL, question TEXT NOT NULL)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_composition_questions_composition_id ON composition_questions(composition_id)")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE composition_sections ADD COLUMN interpretation TEXT")
+                db.execSQL("ALTER TABLE composition_sections ADD COLUMN source_fragments TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE composition_sections ADD COLUMN epistemic_status TEXT")
             }
         }
         private const val DB_NAME = "noesis_archive.db"
@@ -84,7 +92,7 @@ abstract class NoesisDatabase : RoomDatabase() {
                 .openHelperFactory(factory)
                 // !! Remove fallbackToDestructiveMigration before 1.0 release.
                 // Replace with proper Migration objects as schema evolves.
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
         }
     }

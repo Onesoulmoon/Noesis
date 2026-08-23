@@ -78,15 +78,32 @@ class EntryRepository(
         runAnalysis(entryNumber, entry.content, entry.language)
     }
 
-    suspend fun composeEntry(entryNumber: Int): Composition {
+    suspend fun composeEntry(entryNumber: Int, mode: String = "default"): Composition {
         val entry = entryDao.getByNumber(entryNumber) ?: error("Entry not found")
         val engine = compositionEngine ?: error("Composition engine not configured")
-        val result = engine.compose(entry.content)
+        
+        val promptSuffix = when (mode) {
+            "concise"   -> "Make the result extremely concise."
+            "analytical"-> "Provide a more deep, analytical structure."
+            "literal"   -> "Stay as literal to the user's wording as possible."
+            "reorganize"-> "Try a completely different structural architecture."
+            else        -> ""
+        }
+
+        val result = engine.compose(entry.content, promptSuffix)
         val (composition, sections, questions) = result.toEntities(entryNumber)
         val compositionDao = dbCompositionDao
         compositionDao.replace(composition, sections, questions)
         return compositionDao.get(entryNumber)!!.let { entity ->
-            val sectionsDomain = compositionDao.getSections(entity.id).map { CompositionSection(it.type, it.title, it.content) }
+            val sectionsDomain = compositionDao.getSections(entity.id).map { 
+                CompositionSection(
+                    type = it.type, 
+                    title = it.title, 
+                    content = it.content,
+                    interpretation = it.interpretation,
+                    sourceFragments = it.sourceFragments.split("|").filter { f -> f.isNotBlank() }
+                ) 
+            }
             val qs = compositionDao.getQuestions(entity.id).map { it.question }
             Composition(entryNumber, entity.title, entity.subtitle, sectionsDomain, entity.keyInsight, qs, entity.modelId, entity.status)
         }
@@ -94,7 +111,16 @@ class EntryRepository(
 
     suspend fun getComposition(entryNumber: Int): Composition? {
         val entity = dbCompositionDao.get(entryNumber) ?: return null
-        val sections = dbCompositionDao.getSections(entity.id).map { CompositionSection(it.type, it.title, it.content) }
+        val sections = dbCompositionDao.getSections(entity.id).map { 
+            CompositionSection(
+                type = it.type, 
+                title = it.title, 
+                content = it.content,
+                interpretation = it.interpretation,
+                sourceFragments = it.sourceFragments.split("|").filter { f -> f.isNotBlank() },
+                epistemicStatus = it.epistemicStatus
+            ) 
+        }
         val questions = dbCompositionDao.getQuestions(entity.id).map { it.question }
         return Composition(entryNumber, entity.title, entity.subtitle, sections, entity.keyInsight, questions, entity.modelId, entity.status)
     }
@@ -144,6 +170,35 @@ class EntryRepository(
     suspend fun toggleUnresolved(entryNumber: Int) {
         val entry = entryDao.getByNumber(entryNumber) ?: return
         entryDao.updateUnresolved(entryNumber, !entry.isUnresolved)
+    }
+
+    suspend fun updateComposition(composition: Composition) {
+        val entryNumber = composition.entryNumber
+        val entity = CompositionEntity(
+            entryNumber = entryNumber,
+            title = composition.title,
+            subtitle = composition.subtitle,
+            keyInsight = composition.keyInsight,
+            rawJson = "{}", // Manual edit loses raw LLM JSON but it's fine
+            modelId = composition.modelId,
+            status = "EDITED"
+        )
+        val sections = composition.sections.mapIndexed { i, s ->
+            CompositionSectionEntity(
+                compositionId = 0,
+                position = i,
+                type = s.type,
+                title = s.title,
+                content = s.content,
+                interpretation = s.interpretation,
+                sourceFragments = s.sourceFragments.joinToString("|"),
+                epistemicStatus = s.epistemicStatus
+            )
+        }
+        val questions = composition.openQuestions.mapIndexed { i, q ->
+            CompositionQuestionEntity(compositionId = 0, position = i, question = q)
+        }
+        dbCompositionDao.replace(entity, sections, questions)
     }
 
     // ─── OBSERVE ────────────────────────────────────────────────

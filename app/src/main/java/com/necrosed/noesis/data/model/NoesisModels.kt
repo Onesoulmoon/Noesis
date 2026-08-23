@@ -125,5 +125,7 @@ data class CompositionSection(
     val type: String,
     val title: String,
     val content: String,
-    val sourceFragments: List<String> = emptyList()
+    val interpretation: String? = null,
+    val sourceFragments: List<String> = emptyList(),
+    val epistemicStatus: String? = null // FACT, BELIEF, HYPOTHESIS, etc.
 )

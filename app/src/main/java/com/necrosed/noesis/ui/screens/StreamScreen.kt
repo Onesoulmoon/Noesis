@@ -40,14 +40,18 @@ fun StreamScreen(viewModel: MainViewModel) {
     val modelStatus by viewModel.modelStatus.collectAsStateWithLifecycle()
 
     if (selectedEntry != null) {
+        androidx.activity.compose.BackHandler {
+            viewModel.clearSelectedEntry()
+        }
         EntryDetailPanel(
             entry     = selectedEntry!!,
             revisions = viewModel.selectedEntryRevisions.collectAsStateWithLifecycle().value,
             composition = composition,
             compositionStatus = compositionStatus,
             modelStatus = modelStatus,
-            onCompose = { viewModel.composeSelectedEntry(selectedEntry!!.entryNumber) },
+            onCompose = { mode -> viewModel.composeSelectedEntry(selectedEntry!!.entryNumber, mode) },
             onInstallLocalModel = viewModel::installLocalModel,
+            onSaveComposition = viewModel::saveComposition,
             onClose   = viewModel::clearSelectedEntry,
             onToggleUnresolved = { viewModel.toggleUnresolved(selectedEntry!!.entryNumber) },
             onArchive = { viewModel.archiveEntry(selectedEntry!!.entryNumber) },
@@ -105,10 +109,20 @@ private fun CompositionPanel(
     composition: Composition?,
     status: CompositionStatus,
     modelStatus: ModelStatus,
-    onCompose: () -> Unit,
+    onCompose: (String) -> Unit,
     onInstallLocalModel: () -> Unit,
+    onSaveEdit: (Composition) -> Unit,
     conceptLinks: List<ConceptLink>
 ) {
+    var expandedSectionIndex by remember { mutableIntStateOf(-1) }
+    var showRegenMenu by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
+    
+    // Edit buffers
+    var editTitle by remember(composition) { mutableStateOf(composition?.title ?: "") }
+    var editSubtitle by remember(composition) { mutableStateOf(composition?.subtitle ?: "") }
+    var editKeyInsight by remember(composition) { mutableStateOf(composition?.keyInsight ?: "") }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -127,15 +141,76 @@ private fun CompositionPanel(
                 Text("COMPOSED THOUGHT", style = NoesisSectionHeader.copy(color = NoesisViolet))
                 Text("ON-DEVICE / GEMMA 4 E2B", style = NoesisMicro.copy(color = NoesisGrayDim, letterSpacing = 1.5.sp))
             }
-            when (status) {
-                is CompositionStatus.Composing -> Text("PROCESSING…", style = NoesisMicro.copy(color = NoesisVioletDim))
-                is CompositionStatus.Error -> Text("ERROR", style = NoesisMicro.copy(color = NoesisWarning))
-                else -> {
-                    if (composition == null) {
+            
+            if (composition != null && !editMode) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "EDIT",
+                        style = NoesisMicro.copy(color = NoesisVioletDim),
+                        modifier = Modifier.clickable { editMode = true }
+                    )
+                    Box {
+                        Text(
+                            text = "REGENERATE ▾",
+                            style = NoesisMicro.copy(color = NoesisVioletDim),
+                            modifier = Modifier.clickable { showRegenMenu = true }
+                        )
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = showRegenMenu,
+                            onDismissRequest = { showRegenMenu = false },
+                            modifier = Modifier.background(NoesisPanelHigh).border(Dp(0.5f), BorderLight)
+                        ) {
+                            listOf(
+                                "default" to "Default",
+                                "concise" to "More Concise",
+                                "analytical" to "More Analytical",
+                                "literal" to "More Literal",
+                                "reorganize" to "Reorganize"
+                            ).forEach { (mode, label) ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(label, style = NoesisMicro.copy(color = NoesisBone)) },
+                                    onClick = { 
+                                        showRegenMenu = false
+                                        onCompose(mode)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (editMode) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "CANCEL",
+                        style = NoesisMicro.copy(color = NoesisGrayDim),
+                        modifier = Modifier.clickable { editMode = false }
+                    )
+                    Text(
+                        text = "SAVE",
+                        style = NoesisMicro.copy(color = NoesisViolet),
+                        modifier = Modifier.clickable { 
+                            onSaveEdit(composition!!.copy(
+                                title = editTitle,
+                                subtitle = editSubtitle.takeIf { it.isNotBlank() },
+                                keyInsight = editKeyInsight.takeIf { it.isNotBlank() }
+                            ))
+                            editMode = false 
+                        }
+                    )
+                }
+            }
+
+            if (composition == null) {
+                when (status) {
+                    is CompositionStatus.Composing -> Text("PROCESSING…", style = NoesisMicro.copy(color = NoesisVioletDim))
+                    is CompositionStatus.Error -> Text("ERROR", style = NoesisMicro.copy(color = NoesisWarning))
+                    else -> {
                         when (modelStatus) {
                             is ModelStatus.NotInstalled -> NoesisButton("INSTALL LOCAL AI", onInstallLocalModel, enabled = true, color = NoesisViolet)
                             is ModelStatus.Downloading -> Text("INSTALLING ${modelStatus.progress}%", style = NoesisMicro.copy(color = NoesisVioletDim))
-                            is ModelStatus.Ready -> NoesisButton("COMPOSE", onCompose, enabled = true, color = NoesisViolet)
+                            is ModelStatus.Ready -> NoesisButton("COMPOSE", { onCompose("default") }, enabled = true, color = NoesisViolet)
                             is ModelStatus.Error -> NoesisButton("RETRY INSTALL", onInstallLocalModel, enabled = true, color = NoesisViolet)
                             is ModelStatus.Incompatible -> Text("AI UNAVAILABLE", style = NoesisMicro.copy(color = NoesisWarning))
                             ModelStatus.Checking -> Text("CHECKING AI…", style = NoesisMicro.copy(color = NoesisGrayDim))
@@ -152,23 +227,97 @@ private fun CompositionPanel(
             if (modelStatus is ModelStatus.NotInstalled || modelStatus is ModelStatus.Error) {
                 NoesisButton("INSTALL / RETRY LOCAL AI", onInstallLocalModel, enabled = true, color = NoesisViolet)
             } else {
-                NoesisButton("RETRY", onCompose, enabled = true, color = NoesisViolet)
+                NoesisButton("RETRY", { onCompose("default") }, enabled = true, color = NoesisViolet)
             }
         }
 
         composition?.let { c ->
             Spacer(Modifier.height(20.dp))
-            Text(c.title.uppercase(), style = NoesisWordmark.copy(fontSize = 24.sp, color = NoesisBone))
-            c.subtitle?.let { Text(it, style = NoesisConceptSub.copy(color = NoesisIvory)) }
+            
+            if (!editMode) {
+                Text(c.title.uppercase(), style = NoesisWordmark.copy(fontSize = 24.sp, color = NoesisBone))
+                c.subtitle?.let { Text(it, style = NoesisConceptSub.copy(color = NoesisIvory)) }
+            } else {
+                BasicTextField(
+                    value = editTitle,
+                    onValueChange = { editTitle = it },
+                    textStyle = NoesisWordmark.copy(fontSize = 24.sp, color = NoesisBone),
+                    modifier = Modifier.fillMaxWidth().border(Dp(0.5f), NoesisVioletDim.copy(alpha = 0.3f)).padding(4.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+                BasicTextField(
+                    value = editSubtitle,
+                    onValueChange = { editSubtitle = it },
+                    textStyle = NoesisConceptSub.copy(color = NoesisIvory),
+                    modifier = Modifier.fillMaxWidth().border(Dp(0.5f), NoesisVioletDim.copy(alpha = 0.3f)).padding(4.dp),
+                    decorationBox = { inner -> if (editSubtitle.isEmpty()) Text("Subtitle (optional)", style = NoesisConceptSub.copy(color = NoesisGhostText)); inner() }
+                )
+            }
             
             Spacer(Modifier.height(16.dp))
             NoesisDivider()
             
-            for (section in c.sections) {
-                Column(Modifier.padding(vertical = 12.dp)) {
-                    Text(section.title.uppercase(), style = NoesisSectionHeader.copy(fontSize = 14.sp, color = NoesisVioletDim, letterSpacing = 1.sp))
+            c.sections.forEachIndexed { index, section ->
+                val isExpanded = expandedSectionIndex == index
+                val isTension = section.type == "TENSION"
+                val accent = if (isTension) NoesisWarning else NoesisVioletDim
+                
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { expandedSectionIndex = if (isExpanded) -1 else index }
+                        .padding(vertical = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(section.title.uppercase(), style = NoesisSectionHeader.copy(fontSize = 14.sp, color = accent, letterSpacing = 1.sp), modifier = Modifier.weight(1f))
+                        section.epistemicStatus?.let { status ->
+                            Text(
+                                text = status,
+                                style = NoesisMicro.copy(
+                                    color = when(status) {
+                                        "FACT" -> NoesisViolet
+                                        "BELIEF" -> NoesisResolved
+                                        "HYPOTHESIS" -> NoesisVioletDim
+                                        "QUESTION" -> NoesisWarning
+                                        else -> NoesisGrayDim
+                                    },
+                                    fontSize = 8.sp,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier
+                                    .border(Dp(0.5f), NoesisGrayDim.copy(alpha = 0.3f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(section.content, style = NoesisEntryBody.copy(fontSize = 14.sp, color = NoesisBone))
+                    
+                    AnimatedVisibility(visible = isExpanded && !editMode) {
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 12.dp)
+                                .background(if (isTension) NoesisWarningVeil else NoesisPanelMid)
+                                .border(Dp(0.5f), accent.copy(alpha = 0.3f))
+                                .padding(12.dp)
+                        ) {
+                            Text(if (isTension) "WHY THIS TENSION?" else "WHY THIS SECTION?", style = NoesisLabel.copy(color = accent, fontSize = 10.sp))
+                            Spacer(Modifier.height(8.dp))
+                            
+                            if (section.sourceFragments.isNotEmpty()) {
+                                Text("DERIVED FROM:", style = NoesisMicro.copy(color = NoesisGrayDim))
+                                section.sourceFragments.forEach { fragment ->
+                                    Text("• \"$fragment\"", style = NoesisEntryBody.copy(fontSize = 12.sp, color = NoesisIvory))
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
+                            
+                            section.interpretation?.let {
+                                Text("INTERPRETATION:", style = NoesisMicro.copy(color = NoesisGrayDim))
+                                Text(it, style = NoesisEntryBody.copy(fontSize = 12.sp, color = NoesisBone))
+                            }
+                        }
+                    }
                 }
                 NoesisDottedRule(color = BorderFaint)
             }
@@ -177,7 +326,16 @@ private fun CompositionPanel(
                 Column(Modifier.padding(vertical = 12.dp)) {
                     Text("KEY INSIGHT", style = NoesisSectionHeader.copy(fontSize = 14.sp, color = NoesisViolet, letterSpacing = 1.5.sp))
                     Spacer(Modifier.height(6.dp))
-                    Text(insight, style = NoesisEntryBody.copy(fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                    if (!editMode) {
+                        Text(insight, style = NoesisEntryBody.copy(fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                    } else {
+                        BasicTextField(
+                            value = editKeyInsight,
+                            onValueChange = { editKeyInsight = it },
+                            textStyle = NoesisEntryBody.copy(fontSize = 14.sp),
+                            modifier = Modifier.fillMaxWidth().border(Dp(0.5f), NoesisVioletDim.copy(alpha = 0.3f)).padding(4.dp)
+                        )
+                    }
                 }
                 NoesisDivider(color = BorderLight)
             }
@@ -261,8 +419,9 @@ private fun EntryDetailPanel(
     composition: Composition?,
     compositionStatus: CompositionStatus,
     modelStatus: ModelStatus,
-    onCompose: () -> Unit,
+    onCompose: (String) -> Unit,
     onInstallLocalModel: () -> Unit,
+    onSaveComposition: (Composition) -> Unit,
     onClose: () -> Unit,
     onToggleUnresolved: () -> Unit,
     onArchive: () -> Unit,
@@ -273,6 +432,16 @@ private fun EntryDetailPanel(
     var showPurgeConfirm by remember { mutableStateOf(false) }
     var reviseText by remember { mutableStateOf("") }
     var rawDumpExpanded by remember { mutableStateOf(composition == null) }
+
+    if (showReviseMode) {
+        androidx.activity.compose.BackHandler {
+            showReviseMode = false
+        }
+    } else if (showPurgeConfirm) {
+        androidx.activity.compose.BackHandler {
+            showPurgeConfirm = false
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().noesisScanlines(),
@@ -305,6 +474,7 @@ private fun EntryDetailPanel(
                 modelStatus = modelStatus,
                 onCompose = onCompose,
                 onInstallLocalModel = onInstallLocalModel,
+                onSaveEdit = onSaveComposition,
                 conceptLinks = entry.conceptLinks
             )
         }

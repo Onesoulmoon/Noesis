@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +64,21 @@ fun ConceptDetailScreen(
         // ── IDENTITY BLOCK ──────────────────────────────────────
         item {
             ConceptIdentityBlock(concept = concept, accentColor = accentColor)
+        }
+
+        // ── EVOLUTION TIMELINE ──────────────────────────────────
+        if (sourceEntries.isNotEmpty()) {
+            item {
+                NoesisSectionHeader(
+                    title = "CONCEPT EVOLUTION",
+                    subtitle = "CHRONOLOGICAL SHIFTS IN THOUGHT"
+                )
+            }
+            item {
+                Box(Modifier.padding(horizontal = 12.dp)) {
+                    EvolutionTimeline(entries = sourceEntries.sortedBy { it.createdAt }, accentColor = accentColor)
+                }
+            }
         }
 
         // ── TEMPORAL RECORD ─────────────────────────────────────
@@ -134,6 +150,47 @@ fun ConceptDetailScreen(
 }
 
 // ─── IDENTITY BLOCK ─────────────────────────────────────────────
+
+@Composable
+private fun EvolutionTimeline(entries: List<Entry>, accentColor: androidx.compose.ui.graphics.Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(NoesisPanel)
+            .border(Dp(0.5f), BorderLight)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        entries.forEachIndexed { index, entry ->
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = formatEntryDate(entry.createdAt).replace(" ", "\n"),
+                        style = NoesisMicro.copy(color = NoesisGrayDim, textAlign = TextAlign.Center),
+                        modifier = Modifier.width(45.dp)
+                    )
+                    if (index < entries.size - 1) {
+                        Box(Modifier.width(1.dp).height(20.dp).background(BorderFaint))
+                        Text("↓", style = NoesisMicro.copy(color = BorderFaint))
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "\"${entry.content}\"",
+                        style = NoesisEntryBody.copy(fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = NoesisIvory),
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = entry.displayId,
+                        style = NoesisMicro.copy(color = accentColor)
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ConceptIdentityBlock(concept: Concept, accentColor: androidx.compose.ui.graphics.Color) {

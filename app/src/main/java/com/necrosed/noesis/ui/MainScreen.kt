@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.necrosed.noesis.ui.components.*
 import com.necrosed.noesis.ui.screens.*
 import com.necrosed.noesis.ui.theme.*
@@ -39,7 +40,12 @@ enum class NoesisTab(val label: String, val symbol: String) {
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    var activeTab by remember { mutableStateOf(NoesisTab.CAPTURE) }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = NoesisTab.CAPTURE.ordinal,
+        pageCount = { NoesisTab.entries.size }
+    )
+    val coroutineScope = rememberCoroutineScope()
+    val activeTab = NoesisTab.entries[pagerState.currentPage]
 
     Box(
         modifier = Modifier
@@ -56,9 +62,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     NoesisTopBar(tab = activeTab, viewModel = viewModel)
                 }
 
-                // Content
-                Box(modifier = Modifier.weight(1f)) {
-                    when (activeTab) {
+                // Content with Swipable Pager
+                androidx.compose.foundation.pager.HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f),
+                    beyondViewportPageCount = 1
+                ) { page ->
+                    when (NoesisTab.entries[page]) {
                         NoesisTab.CAPTURE  -> CaptureScreen(viewModel)
                         NoesisTab.STREAM   -> StreamScreen(viewModel)
                         NoesisTab.CONCEPTS -> ConceptsScreen(viewModel)
@@ -67,7 +77,14 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
 
                 // Bottom navigation
-                NoesisBottomNav(activeTab = activeTab, onTabSelected = { activeTab = it })
+                NoesisBottomNav(
+                    activeTab = activeTab,
+                    onTabSelected = { tab ->
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(tab.ordinal)
+                        }
+                    }
+                )
             }
         }
     }
@@ -83,6 +100,7 @@ private fun NoesisTopBar(tab: NoesisTab, viewModel: MainViewModel) {
         modifier = Modifier
             .fillMaxWidth()
             .background(NoesisVoid)
+            .statusBarsPadding()
             .drawBehind {
                 drawLine(
                     color       = BorderLight,

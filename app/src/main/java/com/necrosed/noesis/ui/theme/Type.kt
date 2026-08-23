@@ -10,24 +10,11 @@ import androidx.compose.ui.unit.sp
 import com.necrosed.noesis.R
 
 // ═══════════════════════════════════════════════════════════════
-// NOESIS — DUAL TYPOGRAPHY SYSTEM
+// NOESIS — MONOSPACE TYPOGRAPHY SYSTEM
 //
-// TWO TYPEFACES. STRICT SEPARATION. NO EXCEPTIONS.
-//
-// SPECTRAL (serif)
-//   Purpose: NOESIS identity, concept headings, section titles,
-//            archival quotations, philosophical statements.
-//   Character: Scholarly, authoritative, forbidden library.
-//   Usage: Sparing. Headlines and conceptual markers only.
-//
-// IBM PLEX MONO (monospace)
-//   Purpose: All records, timestamps, IDs, statistics, labels,
-//            system messages, entry text, technical metadata.
-//   Character: Research terminal, precise, trustworthy.
-//   Usage: Everything else. The default typeface of the archive.
-//
-// The user's raw thought text should feel like a record,
-// not book typography. Monospace for all entry content.
+// Paradigm: The Research Terminal.
+// All content is rendered in IBM PLEX MONO to emphasize that
+// every thought is a record, not a manuscript.
 // ═══════════════════════════════════════════════════════════════
 
 private val GFontProvider = GoogleFont.Provider(
@@ -36,16 +23,7 @@ private val GFontProvider = GoogleFont.Provider(
     certificates      = R.array.com_google_android_gms_fonts_certs
 )
 
-private val SpectralFont  = GoogleFont("Spectral")
 private val PlexMonoFont  = GoogleFont("IBM Plex Mono")
-
-val Spectral = FontFamily(
-    Font(googleFont = SpectralFont, fontProvider = GFontProvider, weight = FontWeight.Normal),
-    Font(googleFont = SpectralFont, fontProvider = GFontProvider, weight = FontWeight.Medium),
-    Font(googleFont = SpectralFont, fontProvider = GFontProvider, weight = FontWeight.SemiBold),
-    Font(googleFont = SpectralFont, fontProvider = GFontProvider,
-        weight = FontWeight.Normal, style = FontStyle.Italic),
-)
 
 val PlexMono = FontFamily(
     Font(googleFont = PlexMonoFont, fontProvider = GFontProvider, weight = FontWeight.Light),
@@ -59,14 +37,14 @@ val PlexMono = FontFamily(
 // ─── TYPOGRAPHY STYLES ──────────────────────────────────────────
 
 val NoesisWordmark = TextStyle(
-    fontFamily    = Spectral,
+    fontFamily    = PlexMono,
     fontWeight    = FontWeight.SemiBold,
     fontSize      = 28.sp,
     letterSpacing = 1.sp
 )
 
 val NoesisSectionHeader = TextStyle(
-    fontFamily    = Spectral,
+    fontFamily    = PlexMono,
     fontWeight    = FontWeight.Medium,
     fontSize      = 18.sp,
     letterSpacing = 0.5.sp
@@ -101,7 +79,7 @@ val NoesisMicro = TextStyle(
 )
 
 val NoesisConceptSub = TextStyle(
-    fontFamily    = Spectral,
+    fontFamily    = PlexMono,
     fontWeight    = FontWeight.Medium,
     fontStyle     = FontStyle.Italic,
     fontSize      = 14.sp

@@ -352,7 +352,7 @@ private fun OperationalNotesPanel() {
                 "MATCHING"       to "Stem + surface form comparison",
                 "PERSISTENCE"    to "Temporal analysis across observation history",
                 "NETWORK"        to "Zero — local only",
-                "AI / LLM"       to "None in v1.0 — engine is deterministic"
+                "AI / LLM"       to "Gemma 4 E2B — On-device Composition"
             ).forEach { (k, v) ->
                 ArchiveStatRow(k, v, modifier = Modifier.padding(vertical = 1.dp))
             }

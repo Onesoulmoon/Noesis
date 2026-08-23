@@ -30,11 +30,15 @@ import com.necrosed.noesis.ui.theme.*
 @Composable
 fun ConceptsScreen(viewModel: MainViewModel) {
     val concepts        by viewModel.concepts.collectAsStateWithLifecycle()
+    val persistentIdeas by viewModel.persistentDashboardConcepts.collectAsStateWithLifecycle()
     val selectedConcept by viewModel.selectedConcept.collectAsStateWithLifecycle()
     val window          by viewModel.window.collectAsStateWithLifecycle()
     val stats           by viewModel.stats.collectAsStateWithLifecycle()
 
     if (selectedConcept != null) {
+        androidx.activity.compose.BackHandler {
+            viewModel.clearSelectedConcept()
+        }
         ConceptDetailScreen(
             concept        = selectedConcept!!,
             sourceEntries  = viewModel.selectedConceptEntries.collectAsStateWithLifecycle().value,
@@ -70,6 +74,22 @@ fun ConceptsScreen(viewModel: MainViewModel) {
                 Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     AnalysisSummaryCard(stats = s, window = window)
                 }
+            }
+        }
+
+        // ── PERSISTENT IDEAS DASHBOARD ──────────────────────────
+        if (persistentIdeas.isNotEmpty()) {
+            item {
+                NoesisSectionHeader(
+                    title = "PERSISTENT IDEAS",
+                    subtitle = "3+ MENTIONS · 5D+ HISTORY · ACTIVE IN LAST 7D"
+                )
+            }
+            item {
+                PersistentIdeasDashboard(
+                    concepts = persistentIdeas,
+                    onClick = { viewModel.openConcept(it.conceptNumber) }
+                )
             }
         }
 
@@ -188,6 +208,42 @@ private fun AnalysisSummaryCard(stats: ArchiveStats, window: AnalysisWindow) {
                 Text(
                     text  = "ARCHIVE ORIGIN  ${formatFullDate(oldest)}",
                     style = NoesisMicro.copy(color = NoesisGhostText)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersistentIdeasDashboard(
+    concepts: List<Concept>,
+    onClick: (Concept) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .background(NoesisPanel)
+            .border(Dp(0.5f), NoesisVioletDim.copy(alpha = 0.3f))
+            .manuscriptCorners(color = NoesisViolet.copy(alpha = 0.5f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        concepts.forEach { concept ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onClick(concept) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = concept.label,
+                    style = NoesisConceptTitle.copy(color = NoesisBone, fontSize = 14.sp),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${concept.observationCount} MENTIONS",
+                    style = NoesisMicro.copy(color = NoesisVioletDim, letterSpacing = 1.sp)
                 )
             }
         }

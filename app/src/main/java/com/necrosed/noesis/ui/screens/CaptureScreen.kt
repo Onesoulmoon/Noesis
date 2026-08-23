@@ -113,6 +113,7 @@ private fun ArchiveWordmark() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
         // Spectral serif title — the NOESIS identity

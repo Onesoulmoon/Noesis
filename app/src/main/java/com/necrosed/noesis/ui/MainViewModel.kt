@@ -86,6 +86,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { it.take(3) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ─── PERSISTENT DASHBOARD ──────────────────────────────────
+    // mentioned 3+ times, first observed 5+ days ago, appeared in last 7 days.
+    val persistentDashboardConcepts: StateFlow<List<Concept>> = concepts
+        .map { list ->
+            val now = System.currentTimeMillis()
+            val fiveDaysMs = 5L * 24 * 60 * 60 * 1000L
+            val sevenDaysMs = 7L * 24 * 60 * 60 * 1000L
+            list.filter { c ->
+                c.observationCount >= 3 &&
+                (now - c.firstObserved) >= fiveDaysMs &&
+                (now - c.lastObserved) <= sevenDaysMs
+            }.sortedByDescending { it.observationCount }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // ─── ARCHIVE STATS ──────────────────────────────────────────
 
     private val _window = MutableStateFlow(AnalysisWindow.DAYS_30)
@@ -213,15 +228,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun composeSelectedEntry(entryNumber: Int) {
+    fun composeSelectedEntry(entryNumber: Int, mode: String = "default") {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 _compositionStatus.value = CompositionStatus.Composing(entryNumber)
-                _selectedComposition.value = entryRepo.composeEntry(entryNumber)
+                _selectedComposition.value = entryRepo.composeEntry(entryNumber, mode)
                 _compositionStatus.value = CompositionStatus.Ready(entryNumber)
             } catch (e: Throwable) {
                 _compositionStatus.value = CompositionStatus.Error(entryNumber, e.message ?: "Local composition failed")
             }
+        }
+    }
+
+    fun saveComposition(composition: Composition) {
+        viewModelScope.launch(Dispatchers.IO) {
+            entryRepo.updateComposition(composition)
+            _selectedComposition.value = entryRepo.getComposition(composition.entryNumber)
         }
     }
 
