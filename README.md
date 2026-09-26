@@ -29,6 +29,81 @@ The distinction between the two is fundamental:
 > **The user's thought is the source of truth.**
 > **NOESIS's interpretation is only an interpretation.**
 
+
+# Release Notes: Noesis v2.0.0 — Dynamic AI Engine & Local PKM Architecture
+
+### 🚀 Summary
+
+This major release transforms **Noesis** from a single-purpose synthesis tool into a local-first Personal Knowledge Management (PKM) system powered by a dynamic multi-role AI engine, interactive graph visualization, full-text search, and system-wide ambient capture.
+
+---
+
+### ✨ What's New
+
+#### 🧠 Dynamic Multi-Role AI Engine (`GemmaCompositionEngine`)
+
+* **9 Operational Personas:** Implemented `AiRole` support for `SYNTHESIS`, `CORRECTION`, `ANALYSIS`, `RECOMMENDATION`, `PROGRESS_TRACKER`, `CONNECTOR`, `SOCRATIC`, `ACTION_PLANNER`, and `DEVILS_ADVOCATE`.
+* **Structured Prompt Factory:** Built `RolePromptFactory` using Gemma `<start_of_turn>` templates designed for on-device inference.
+* **Multi-Pass Pipeline Chaining:** Enabled execution chaining so outputs from one persona feed directly into another (e.g., `CONNECTOR` $\rightarrow$ `ACTION_PLANNER`).
+* **Role Selection UI:** Added Jetpack Compose `RoleSelectorRow` filter chips for on-the-fly role switching in `CaptureScreen` and `StreamScreen`.
+
+#### 🔗 Local PKM Core & Bi-Directional Linking
+
+* **Zero-AI Wiki-Link Parser:** Integrated `WikiLinkParser` to extract inline `[[Concept Title]]` references deterministically.
+* **Room Relational Schema:** Updated `ConceptEntity` and created `EntryConceptCrossRef` mapping tables for zero-latency concept linking.
+
+#### ⚡ Sub-Millisecond Search (SQLite FTS5)
+
+* **Full-Text Search Table:** Added `EntryFtsEntity` utilizing SQLite FTS5.
+* **FTS Search Queries:** Updated `EntryDao` with `searchEntriesFts()` for fast offline fuzzy searching across title and body content.
+
+#### 🕸️ Interactive Canvas Graph & Force-Directed Physics
+
+* **Physics Layout Engine:** Implemented `ForceDirectedLayout` calculating node positions via Coulomb repulsion ($F_r = \frac{k_r}{d^2}$) and Hooke spring attraction ($F_a = k_a \cdot d$).
+* **Compose Custom Canvas:** Created `KnowledgeGraphCanvas` with multi-touch pan, pinch-to-zoom, dynamic node rendering, and edge connecting lines.
+
+#### 🔒 Zero-Lock-In Vault & Cryptographic Engine
+
+* **Obsidian/Logseq Export:** Integrated `VaultExporter` to export entries as standard `.md` files complete with structured YAML frontmatter.
+* **AES-256-GCM Encryption:** Added `VaultEncryptor` utilizing Android Keystore keys for secure local data backups.
+
+#### 📥 Ambient Quick Capture & Zero-Cloud Sync
+
+* **Android Share Target:** Created `ShareTargetActivity` to handle system `text/plain` share intents, saving text and links into Room without launching the main UI.
+* **Local Vault Sync:** Added `LocalVaultSyncManager` to automate non-blocking background exports to user-specified device folders.
+
+---
+
+### 🛠️ Architecture & Core Files
+
+| Subsystem | Core Source Files |
+| --- | --- |
+| **AI Personas** | `AiRole.kt`<br>
+
+<br>`RolePromptFactory.kt`<br>
+
+<br>`GemmaCompositionEngine.kt` |
+| **Persistence & Search** | `EntryEntity.kt`<br>
+
+<br>`EntryFtsEntity.kt`<br>
+
+<br>`ConceptEntity.kt`<br>
+
+<br>`EntryConceptCrossRef.kt`<br>
+
+<br>`EntryDao.kt` |
+| **Graph & Visualization** | `WikiLinkParser.kt`<br>
+
+<br>`ForceDirectedLayout.kt`<br>
+
+<br>`KnowledgeGraphCanvas.kt` |
+| **Capture & Export** | `ShareTargetActivity.kt`<br>
+
+<br>`VaultExporter.kt`<br>
+
+<br>`VaultEncryptor.kt`<br>
+
+<br>`LocalVaultSyncManager.kt` |
 ---
 
 # TABLE OF CONTENTS
