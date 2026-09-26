@@ -8,9 +8,6 @@ interface CompositionDao {
     @Query("SELECT * FROM compositions WHERE entry_number = :entryNumber LIMIT 1")
     suspend fun get(entryNumber: Int): CompositionEntity?
 
-    @Query("SELECT * FROM compositions WHERE role = :role ORDER BY createdAt DESC")
-    suspend fun getCompositionsByRole(role: String): List<CompositionEntity>
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(composition: CompositionEntity): Long
 

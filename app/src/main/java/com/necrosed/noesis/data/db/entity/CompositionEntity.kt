@@ -14,7 +14,6 @@ data class CompositionEntity(
     val keyInsight: String?,
     val rawJson: String,
     val modelId: String,
-    val role: String = "SYNTHESIS",
     val status: String = "READY",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
