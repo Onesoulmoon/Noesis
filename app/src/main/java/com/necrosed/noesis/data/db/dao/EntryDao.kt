@@ -50,6 +50,9 @@ interface EntryDao {
     @Query("SELECT * FROM entries ORDER BY created_at DESC")
     fun observeAll(): Flow<List<EntryEntity>>
 
+    @Query("SELECT * FROM entries WHERE status = 'ACTIVE' ORDER BY created_at DESC")
+    suspend fun getAllActive(): List<EntryEntity>
+
     @Query("SELECT * FROM entries WHERE entry_number = :number LIMIT 1")
     suspend fun getByNumber(number: Int): EntryEntity?
 
@@ -123,8 +126,6 @@ interface EntryDao {
     suspend fun updateLanguage(entryNumber: Int, language: String)
 
     // ─── PURGE ──────────────────────────────────────────────────
-    // Permanent deletion. Content is wiped, row is retained for continuity.
-    // The sequence number N-XXXX is permanently retired.
 
     @Query("""
         UPDATE entries

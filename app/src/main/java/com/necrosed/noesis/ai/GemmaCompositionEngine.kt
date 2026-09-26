@@ -17,13 +17,30 @@ class GemmaCompositionEngine(context: Context) {
     private val appContext = context.applicationContext
     private val modelManager = OnDeviceModelManager(appContext)
 
+    suspend fun executeRole(
+        content: String,
+        role: AiRole,
+        extraContext: String? = null
+    ): Result<String> = runCatching {
+        check(modelManager.isInstalled()) { "The on-device model is not installed." }
+        val prompt = RolePromptFactory.createPrompt(role, content, extraContext)
+        runInference(prompt)
+    }
+
+    suspend fun executePipeline(
+        content: String,
+        primaryRole: AiRole,
+        secondaryRole: AiRole
+    ): Result<Pair<String, String>> = runCatching {
+        val firstPass = executeRole(content, primaryRole).getOrThrow()
+        val secondPass = executeRole(firstPass, secondaryRole).getOrThrow()
+        Pair(firstPass, secondPass)
+    }
+
     suspend fun processEntry(
         inputContent: String,
         role: AiRole = AiRole.SYNTHESIS
-    ): Result<String> = runCatching {
-        val prompt = RolePromptFactory.buildPrompt(role, inputContent)
-        runInference(prompt)
-    }
+    ): Result<String> = executeRole(inputContent, role)
 
     suspend fun compose(
         rawThought: String,
@@ -33,7 +50,6 @@ class GemmaCompositionEngine(context: Context) {
         check(modelManager.isInstalled()) { "The on-device model is not installed." }
 
         val prompt = RolePromptFactory.buildPrompt(role, rawThought, promptSuffix)
-
         val responseText = runInference(prompt)
         parse(responseText, role)
     }
@@ -48,7 +64,6 @@ class GemmaCompositionEngine(context: Context) {
         return try {
             runEngine(configGPU, fullPrompt)
         } catch (_: Throwable) {
-            // Fallback to CPU if GPU inference is not available
             val configCPU = EngineConfig(
                 modelPath = modelManager.modelFile().absolutePath,
                 backend = Backend.CPU(),
