@@ -13,14 +13,18 @@ data class CompositionResult(
     val modelId: String = OnDeviceModelManager.MODEL_ID
 )
 
-fun CompositionResult.toEntities(entryNumber: Int): Triple<CompositionEntity, List<CompositionSectionEntity>, List<CompositionQuestionEntity>> {
+fun CompositionResult.toEntities(
+    entryNumber: Int,
+    role: AiRole = AiRole.SYNTHESIS
+): Triple<CompositionEntity, List<CompositionSectionEntity>, List<CompositionQuestionEntity>> {
     val composition = CompositionEntity(
         entryNumber = entryNumber,
         title = title,
         subtitle = subtitle,
         keyInsight = keyInsight,
         rawJson = rawJson,
-        modelId = modelId
+        modelId = modelId,
+        role = role.name
     )
     // IDs are assigned by Room; DAO replaces the composition and patches these IDs.
     return Triple(

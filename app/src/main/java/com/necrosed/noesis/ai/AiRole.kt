@@ -83,58 +83,116 @@ object RolePromptFactory {
     }
 
     fun buildPrompt(role: AiRole, contextData: String, promptSuffix: String = ""): String {
-        val systemInstruction = when (role) {
-            AiRole.SYNTHESIS ->
-                "You are an elite knowledge synthesizer. Summarize the text accurately without losing critical concepts."
+        val roleDirective = when (role) {
+            AiRole.SYNTHESIS -> """
+                ROLE: Elite Knowledge Synthesizer.
+                GOAL: Distill the input notes into condensed, core insights and key arguments.
+                INSTRUCTIONS:
+                - Create descriptive titles capturing the main points (e.g., "CORE THESIS", "SUPPORTING EVIDENCE").
+                - DO NOT default to template headers like "Diagnosing Motivation" unless explicitly present in the input.
+            """.trimIndent()
 
-            AiRole.CORRECTION ->
-                "You are a meticulous prose editor. Fix grammar, syntax, and phrasing while preserving the author's original voice. Output clear revised text and explanations."
+            AiRole.CORRECTION -> """
+                ROLE: Copy Editor & Prose Refiner (Clarity & Grammar).
+                GOAL: Rephrase, polish, and fix grammar, typos, punctuation, and flow while strictly preserving the author's authentic voice.
+                INSTRUCTIONS:
+                - DO NOT create motivational diagnosis headers, hypothesis sections, or meta-analysis.
+                - Focus on returning clear, polished prose. Use section titles like "POLISHED TEXT" or "REFINED PROSE".
+                - Put the primary polished text in the first section's content.
+                - Use keyInsight to highlight the primary stylistic or grammatical improvement made.
+            """.trimIndent()
 
-            AiRole.ANALYSIS ->
-                "You are an analytical philosopher and cognitive scientist. Deconstruct the underlying premises, logical structures, and implicit assumptions."
+            AiRole.ANALYSIS -> """
+                ROLE: Analytical Philosopher & Cognitive Scientist (Deep Analysis).
+                GOAL: Deconstruct the underlying premises, logical structures, implicit assumptions, and epistemic statuses.
+                INSTRUCTIONS:
+                - Examine core arguments, identify unspoken assumptions, and evaluate logical coherence.
+                - Assign epistemic statuses (FACT, BELIEF, HYPOTHESIS, QUESTION, OBSERVATION) accurately to each section.
+            """.trimIndent()
 
-            AiRole.RECOMMENDATION ->
-                "You are a strategic editor. Point out logic gaps, unaddressed counter-arguments, and recommend 3 direct improvements."
+            AiRole.RECOMMENDATION -> """
+                ROLE: Strategic Editor & Refinement Advisor.
+                GOAL: Point out logic gaps, unaddressed counter-arguments, and recommend concrete, actionable improvements.
+                INSTRUCTIONS:
+                - Structure sections as specific improvements (e.g., "STRUCTURAL GAP", "RECOMMENDED REFLECTION").
+            """.trimIndent()
 
-            AiRole.PROGRESS_TRACKER ->
-                "You are a cognitive progress tracker. Analyze these chronological notes and output a summary of how the author's ideas have evolved."
+            AiRole.PROGRESS_TRACKER -> """
+                ROLE: Cognitive Progress Tracker.
+                GOAL: Evaluate shifts in perspective and ongoing thought trends in the text.
+                INSTRUCTIONS:
+                - Identify evolving ideas, persistent convictions, and changing viewpoints.
+            """.trimIndent()
 
-            AiRole.CONNECTOR ->
-                "You are a graph database system. Identify thematic nodes, linked concepts, and conceptual associations across the text."
+            AiRole.CONNECTOR -> """
+                ROLE: Knowledge Graph System.
+                GOAL: Identify thematic nodes, linked concepts, and conceptual associations across the text.
+                INSTRUCTIONS:
+                - Group material by core themes and concepts.
+            """.trimIndent()
 
-            AiRole.SOCRATIC ->
-                "You are a Socratic dialogue partner. Do not edit or summarize. Ask 3 concise, highly challenging questions that encourage deeper reflection."
+            AiRole.SOCRATIC -> """
+                ROLE: Socratic Dialogue Partner.
+                GOAL: Challenge and deepen understanding through targeted questions.
+                INSTRUCTIONS:
+                - Formulate highly challenging, probing questions to test the author's assumptions.
+                - Populate openQuestions with 3-5 sharp, probing questions.
+            """.trimIndent()
 
-            AiRole.ACTION_PLANNER ->
-                "You are an executive productivity engine. Extract all actionable tasks, next steps, or implicit to-dos into a clean Markdown checklist."
+            AiRole.ACTION_PLANNER -> """
+                ROLE: Executive Productivity Engine.
+                GOAL: Extract actionable tasks and next steps.
+                INSTRUCTIONS:
+                - Convert implicit or explicit to-dos into a structured checklist in the sections.
+            """.trimIndent()
 
-            AiRole.DEVILS_ADVOCATE, AiRole.COUNTER_PERSPECTIVE ->
-                "You are a rigorous debate advisor. Identify weaknesses in the argument and formulate valid counter-perspectives to test its strength."
+            AiRole.DEVILS_ADVOCATE, AiRole.COUNTER_PERSPECTIVE -> """
+                ROLE: Critical Thinker & Devil's Advocate.
+                GOAL: Challenge assumptions, point out flaws, blind spots, and counter-arguments directly.
+                INSTRUCTIONS:
+                - DO NOT format this as a standard synthesis note or motivational diagnosis.
+                - Actively argue against the premises. Use section titles like "CHALLENGED ASSUMPTION", "COUNTER-ARGUMENT", "BLIND SPOT".
+            """.trimIndent()
         }
 
-        val rules = """
-            RULES:
-            - Distinguish observations (the author's ideas) from interpretations (your analysis).
-            - Use precise, descriptive titles for sections.
-            - For each section, provide a list of "sourceFragments" (exact short quotes from the input) that justify the section.
-            - For each section, provide an "interpretation" field explaining WHY these fragments belong together in this section.
-            - For each section, assess the "epistemicStatus": FACT, BELIEF, HYPOTHESIS, QUESTION, or OBSERVATION.
-            - Make the result substantially more concise and structured than the raw input.
-            - Return ONLY valid JSON matching this schema:
-            {"title":string,"subtitle":string|null,"sections":[{"type":"ARGUMENT|OBSERVATION|QUESTION|TENSION|INTERPRETATION|CONTEXT|CONCLUSION","title":string,"content":string,"interpretation":string|null,"epistemicStatus":"FACT|BELIEF|HYPOTHESIS|QUESTION|OBSERVATION"|null,"sourceFragments":[string]}],"keyInsight":string|null,"openQuestions":[string]}
+        val schemaSpec = """
+            Return ONLY a single valid JSON object matching EXACTLY this structure:
+            {
+              "title": "A concise title specific to this content and role",
+              "subtitle": null,
+              "sections": [
+                {
+                  "type": "ARGUMENT|OBSERVATION|QUESTION|TENSION|INTERPRETATION|CONTEXT|CONCLUSION",
+                  "title": "Section Title Specific To Role and Content",
+                  "content": "Detailed text content for this section",
+                  "interpretation": "Brief rationale or null",
+                  "epistemicStatus": "FACT|BELIEF|HYPOTHESIS|QUESTION|OBSERVATION",
+                  "sourceFragments": ["exact short quotes from input"]
+                }
+              ],
+              "keyInsight": "One line summary insight or null",
+              "openQuestions": ["Question 1", "Question 2"]
+            }
         """.trimIndent()
 
-        val contextBlock = if (promptSuffix.isNotBlank()) "\nAdditional Historical Context:\n\"\"\"\n$promptSuffix\n\"\"\"\n" else ""
+        val modifier = if (promptSuffix.isNotBlank()) "\nPROMPT MODIFIER: $promptSuffix\n" else ""
 
         return """
             <start_of_turn>user
-            Role Instruction: $systemInstruction
-            $contextBlock
-            Target Input:
+            $roleDirective
+            $modifier
+            INPUT TEXT:
             \"\"\"
             $contextData
             \"\"\"
-            $rules
+
+            CRITICAL RULES:
+            1. Adapt your analysis strictly to the requested ROLE (${role.displayName}).
+            2. DO NOT output conversational text, markdown pre-ambles, or ```json backticks.
+            3. Return ONLY valid, parseable JSON matching the schema below.
+
+            SCHEMA:
+            $schemaSpec
             <end_of_turn>
             <start_of_turn>model
         """.trimIndent()

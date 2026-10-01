@@ -183,13 +183,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun archiveThought() {
         val text = _captureText.value.trim()
-        if (text.isBlank()) return
+        if (text.isBlank() || _captureStatus.value is CaptureStatus.Archiving) return
+        
+        _captureText.value = ""
         _captureStatus.value = CaptureStatus.Archiving
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val number = entryRepo.captureEntry(CaptureInput(text))
-                _captureText.value = ""
                 _captureStatus.value = CaptureStatus.Archived(
                     entryId = "N-${number.toString().padStart(4, '0')}"
                 )

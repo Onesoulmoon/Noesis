@@ -56,6 +56,16 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE entry_number = :number LIMIT 1")
     suspend fun getByNumber(number: Int): EntryEntity?
 
+    @Query("""
+        SELECT * FROM entries
+        WHERE status != 'PURGED'
+        AND content = :content
+        AND created_at >= :since
+        ORDER BY created_at DESC
+        LIMIT 1
+    """)
+    suspend fun findRecentDuplicate(content: String, since: Long): EntryEntity?
+
     @Query("SELECT * FROM entries WHERE status = 'ACTIVE' ORDER BY created_at DESC LIMIT :limit")
     suspend fun getRecent(limit: Int = 5): List<EntryEntity>
 

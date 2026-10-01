@@ -55,14 +55,21 @@ class EntryRepository(
     // ─── CAPTURE ────────────────────────────────────────────────
 
     suspend fun captureEntry(input: CaptureInput): Int {
+        val trimmedContent = input.content.trim()
+        val recentCutoff = System.currentTimeMillis() - 60_000L // 60s deduplication window
+        val existing = entryDao.findRecentDuplicate(trimmedContent, recentCutoff)
+        if (existing != null) {
+            return existing.entryNumber
+        }
+
         val entryNumber = entryDao.nextEntryNumber()
         val language    = if (input.language == "unknown")
-                              detectLanguage(input.content) else input.language
-        val isUnresolved = textAnalyzer.isUnresolved(input.content)
+                              detectLanguage(trimmedContent) else input.language
+        val isUnresolved = textAnalyzer.isUnresolved(trimmedContent)
 
         val entity = EntryEntity(
             entryNumber    = entryNumber,
-            content        = input.content.trim(),
+            content        = trimmedContent,
             language       = language,
             isUnresolved   = isUnresolved,
             createdAt      = System.currentTimeMillis(),
@@ -97,7 +104,7 @@ class EntryRepository(
         }
 
         val result = engine.compose(entry.content, role = role, promptSuffix = promptSuffix)
-        val (composition, sections, questions) = result.toEntities(entryNumber)
+        val (composition, sections, questions) = result.toEntities(entryNumber, role = role)
         val compositionDao = dbCompositionDao
         compositionDao.replace(composition, sections, questions)
         return compositionDao.get(entryNumber)!!.let { entity ->
